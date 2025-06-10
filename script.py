@@ -6,6 +6,7 @@ import warnings
 import torch
 import json
 import gc
+import shutil
 
 warnings.filterwarnings("ignore")
 
@@ -13,21 +14,30 @@ FFMPEG_PATH = r"D:\fzwork\ffmpeg-2023-11-05-git-44a0148fad-essentials_build\bin"
 os.environ["PATH"] += os.pathsep + FFMPEG_PATH
 
 class VideoProcessor:
-    def __init__(self, url, base_output_dir=None):
-        self.url = url
+    def __init__(self, source, base_output_dir=None):
+        self.source = source
+        self.is_url = source.startswith(('http://', 'https://', 'www.'))
         self.base_output_dir = Path(base_output_dir) if base_output_dir else Path(__file__).parent / "video_output"
         self.video_info = None
         self.video_dir = None
         self.setup_directories()
-        self.cut_time_range = None  # 新增时间范围属性
+        self.cut_time_range = None
 
     def setup_directories(self):
         try:
-            cmd = ['yt-dlp', '-j', self.url]
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            self.video_info = json.loads(result.stdout)
+            if self.is_url:
+                # YouTube URL 处理逻辑
+                cmd = ['yt-dlp', '-j', self.source]
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                self.video_info = json.loads(result.stdout)
+                safe_title = "".join(c for c in self.video_info['title'] if c.isalnum() or c in (' ', '-', '_'))
+            else:
+                # 本地文件处理逻辑
+                source_path = Path(self.source)
+                if not source_path.exists():
+                    raise FileNotFoundError(f"找不到文件: {self.source}")
+                safe_title = "".join(c for c in source_path.stem if c.isalnum() or c in (' ', '-', '_'))
             
-            safe_title = "".join(c for c in self.video_info['title'] if c.isalnum() or c in (' ', '-', '_'))
             self.video_dir = self.base_output_dir / safe_title
             self.video_dir.mkdir(parents=True, exist_ok=True)
             (self.video_dir / "subtitles").mkdir(exist_ok=True)
@@ -38,11 +48,26 @@ class VideoProcessor:
             print(f"设置目录时出错: {e}")
             return False
 
+    def get_video_file(self):
+        try:
+            if self.is_url:
+                return self.download_video_and_thumbnail()
+            else:
+                # 复制本地文件到工作目录
+                source_path = Path(self.source)
+                dest_path = self.video_dir / source_path.name
+                if not dest_path.exists():  # 如果目标目录中没有该文件，则复制
+                    shutil.copy2(source_path, dest_path)
+                return str(dest_path)
+        except Exception as e:
+            print(f"处理视频文件时出错: {str(e)}")
+            return None
+
     def download_video_and_thumbnail(self):
         try:
             command = [
                 'yt-dlp',
-                self.url,
+                self.source,
                 '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
                 '--write-sub',
                 '--sub-lang', 'zh-Hans,ja',
@@ -63,15 +88,12 @@ class VideoProcessor:
 
     def cut_video(self, input_video, start_time, end_time=None):
         try:
-            # ディレクトリ名生成ロジックを修正
             time_str = f"{start_time.replace(':','_')}"
             time_str += f"-{end_time.replace(':','_')}" if end_time else "-full"
             
-            # ディレクトリパス生成を修正
             time_dir = self.video_dir / time_str
             time_dir.mkdir(parents=True, exist_ok=True)
 
-            # 出力ファイル名生成を修正
             output_filename = f"{Path(input_video).stem}_cut"
             output_video = time_dir / f"{output_filename}.mp4"
             self.cut_time_range = time_str
@@ -106,11 +128,9 @@ class VideoProcessor:
 
     def extract_audio(self, input_video):
         try:
-            # 出力ディレクトリの生成ロジックを修正
             output_dir = Path(input_video).parent
             output_filename = Path(input_video).stem
             
-            # ファイル名生成を修正
             output_audio = output_dir / f"{output_filename}.mp3"
             command = [
                 os.path.join(FFMPEG_PATH, "ffmpeg"),
@@ -147,7 +167,6 @@ class VideoProcessor:
             
             result = model.transcribe(audio_file, **transcription_params)
             
-            # 修改字幕保存路径
             output_dir = self.video_dir
             if self.cut_time_range:
                 output_dir = output_dir / self.cut_time_range
@@ -182,8 +201,16 @@ class VideoProcessor:
 
 def main():
     try:
-        print("\n=== YouTube视频处理工具 ===")
-        url = input("\n请输入YouTube视频URL: ").strip()
+        print("\n=== 视频处理工具 ===")
+        source_type = input("\n请选择输入类型：\n1. YouTube URL\n2. 本地视频文件\n请输入(1/2): ").strip()
+        
+        if source_type == "1":
+            source = input("\n请输入YouTube视频URL: ").strip()
+        elif source_type == "2":
+            source = input("\n请输入本地视频文件路径: ").strip()
+        else:
+            raise ValueError("无效的选择")
+
         want_cut = input("\n是否需要截取视频片段？(y/n): ").lower() == 'y'
         
         cut_params = {}
@@ -193,8 +220,8 @@ def main():
             cut_params['start_time'] = start if start else "00:00:00"
             cut_params['end_time'] = end if end else None
 
-        processor = VideoProcessor(url)
-        video_file = processor.download_video_and_thumbnail()
+        processor = VideoProcessor(source)
+        video_file = processor.get_video_file()
         
         if want_cut and video_file:
             video_file = processor.cut_video(video_file, **cut_params)
