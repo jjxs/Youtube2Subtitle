@@ -1,6 +1,3 @@
-
-2. 创建.gitignore文件：
-```gitignore:d%3A%5Cfzwork%5Cai%5Cmp3sub%5C.gitignore
 # Python
 __pycache__/
 *.py[cod]
