@@ -1,0 +1,24 @@
+
+2. 创建.gitignore文件：
+```gitignore:d%3A%5Cfzwork%5Cai%5Cmp3sub%5C.gitignore
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# 本地设置
+.vscode/
+.idea/
+
+# 下载内容
+video_output/
+
+# 日志和缓存
+*.log
+*.cache
+
+# 密钥文件
+*.pem
+*.key
