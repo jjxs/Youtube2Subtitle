@@ -63,20 +63,19 @@ class VideoProcessor:
 
     def cut_video(self, input_video, start_time, end_time=None):
         try:
-            # 生成时间范围文件夹名
+            # ディレクトリ名生成ロジックを修正
             time_str = f"{start_time.replace(':','_')}"
-            if end_time:
-                time_str += f"-{end_time.replace(':','_')}"
-            else:
-                time_str += "-full"
-                
-            # 创建时间范围目录
+            time_str += f"-{end_time.replace(':','_')}" if end_time else "-full"
+            
+            # ディレクトリパス生成を修正
             time_dir = self.video_dir / time_str
-            time_dir.mkdir(exist_ok=True)
-            
-            output_video = time_dir / f"{Path(input_video).stem}_cut.mp4"
-            self.cut_time_range = time_str  # 保存时间范围
-            
+            time_dir.mkdir(parents=True, exist_ok=True)
+
+            # 出力ファイル名生成を修正
+            output_filename = f"{Path(input_video).stem}_cut"
+            output_video = time_dir / f"{output_filename}.mp4"
+            self.cut_time_range = time_str
+
             command = [
                 os.path.join(FFMPEG_PATH, "ffmpeg"),
                 '-i', input_video,
@@ -107,12 +106,12 @@ class VideoProcessor:
 
     def extract_audio(self, input_video):
         try:
-            # 修改输出路径到时间范围目录
+            # 出力ディレクトリの生成ロジックを修正
             output_dir = Path(input_video).parent
-            if self.cut_time_range:
-                output_dir = output_dir / self.cut_time_range
-                
-            output_audio = output_dir / f"{Path(input_video).stem}.mp3"
+            output_filename = Path(input_video).stem
+            
+            # ファイル名生成を修正
+            output_audio = output_dir / f"{output_filename}.mp3"
             command = [
                 os.path.join(FFMPEG_PATH, "ffmpeg"),
                 '-i', input_video,
@@ -147,7 +146,14 @@ class VideoProcessor:
             }
             
             result = model.transcribe(audio_file, **transcription_params)
-            srt_path = self.video_dir / "subtitles" / f"{Path(audio_file).stem}.srt"
+            
+            # 修改字幕保存路径
+            output_dir = self.video_dir
+            if self.cut_time_range:
+                output_dir = output_dir / self.cut_time_range
+                output_dir.mkdir(exist_ok=True, parents=True)
+            
+            srt_path = output_dir / f"{Path(audio_file).stem}.srt"
             
             with open(srt_path, "w", encoding="utf-8") as f:
                 segments = []
