@@ -40,7 +40,6 @@ class VideoProcessor:
             
             self.video_dir = self.base_output_dir / safe_title
             self.video_dir.mkdir(parents=True, exist_ok=True)
-            (self.video_dir / "subtitles").mkdir(exist_ok=True)
             
             print(f"创建目录: {self.video_dir}")
             return True
