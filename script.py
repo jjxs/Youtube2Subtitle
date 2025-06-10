@@ -26,17 +26,18 @@ class VideoProcessor:
     def setup_directories(self):
         try:
             if self.is_url:
-                # YouTube URL 处理逻辑
                 cmd = ['yt-dlp', '-j', self.source]
                 result = subprocess.run(cmd, capture_output=True, text=True)
                 self.video_info = json.loads(result.stdout)
-                safe_title = "".join(c for c in self.video_info['title'] if c.isalnum() or c in (' ', '-', '_'))
+                raw_title = self.video_info['title']
+                # 截取前10个字符并过滤非法字符
+                safe_title = "".join(c for c in raw_title[:10] if c.isalnum() or c in (' ', '-', '_'))
             else:
-                # 本地文件处理逻辑
                 source_path = Path(self.source)
                 if not source_path.exists():
                     raise FileNotFoundError(f"找不到文件: {self.source}")
-                safe_title = "".join(c for c in source_path.stem if c.isalnum() or c in (' ', '-', '_'))
+                # 处理本地文件名前10个字符
+                safe_title = "".join(c for c in source_path.stem[:10] if c.isalnum() or c in (' ', '-', '_'))
             
             self.video_dir = self.base_output_dir / safe_title
             self.video_dir.mkdir(parents=True, exist_ok=True)
