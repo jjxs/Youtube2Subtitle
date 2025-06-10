@@ -19,6 +19,7 @@ class VideoProcessor:
         self.video_info = None
         self.video_dir = None
         self.setup_directories()
+        self.cut_time_range = None  # 新增时间范围属性
 
     def setup_directories(self):
         try:
@@ -62,7 +63,20 @@ class VideoProcessor:
 
     def cut_video(self, input_video, start_time, end_time=None):
         try:
-            output_video = self.video_dir / f"{Path(input_video).stem}_cut.mp4"
+            # 生成时间范围文件夹名
+            time_str = f"{start_time.replace(':','_')}"
+            if end_time:
+                time_str += f"-{end_time.replace(':','_')}"
+            else:
+                time_str += "-full"
+                
+            # 创建时间范围目录
+            time_dir = self.video_dir / time_str
+            time_dir.mkdir(exist_ok=True)
+            
+            output_video = time_dir / f"{Path(input_video).stem}_cut.mp4"
+            self.cut_time_range = time_str  # 保存时间范围
+            
             command = [
                 os.path.join(FFMPEG_PATH, "ffmpeg"),
                 '-i', input_video,
@@ -78,6 +92,14 @@ class VideoProcessor:
             
             print(f"\n截取视频 ({start_time} - {end_time if end_time else '结束'})...")
             subprocess.run(command, check=True)
+            
+            # 移动关联文件
+            for ext in ['.mp3', '.srt']:
+                src = Path(input_video).parent / f"{Path(input_video).stem}{ext}"
+                if src.exists():
+                    dest = time_dir / src.name
+                    src.replace(dest)
+            
             return str(output_video)
         except Exception as e:
             print(f"截取视频出错: {str(e)}")
@@ -85,7 +107,12 @@ class VideoProcessor:
 
     def extract_audio(self, input_video):
         try:
-            output_audio = self.video_dir / f"{Path(input_video).stem}.mp3"
+            # 修改输出路径到时间范围目录
+            output_dir = Path(input_video).parent
+            if self.cut_time_range:
+                output_dir = output_dir / self.cut_time_range
+                
+            output_audio = output_dir / f"{Path(input_video).stem}.mp3"
             command = [
                 os.path.join(FFMPEG_PATH, "ffmpeg"),
                 '-i', input_video,
